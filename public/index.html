@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Browser</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .container { max-width: 960px; margin: auto; }
+    .header { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .table th, .table td { padding: 10px 8px; border: 1px solid #ddd; text-align: left; }
+    .table th { background: #f3f3f3; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .button { padding: 8px 14px; cursor: pointer; border: 1px solid #888; background: #fafafa; }
+    .button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Product Browser</h1>
+    <div class="controls">
+      <label>Category:
+        <select id="categorySelect"><option value="">All</option></select>
+      </label>
+      <label>Page size:
+        <select id="pageSizeSelect"><option>20</option><option selected>50</option><option>100</option></select>
+      </label>
+      <button class="button" id="refreshBtn">Refresh</button>
+      <span id="status"></span>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Price</th>
+          <th>Updated At</th>
+        </tr>
+      </thead>
+      <tbody id="productBody"></tbody>
+    </table>
+    <div class="controls" id="paginationControls">
+      <button class="button" id="loadMoreBtn">Load more</button>
+      <span id="pageInfo"></span>
+    </div>
+  </div>
+  <script>
+    const categorySelect = document.getElementById('categorySelect');
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const productBody = document.getElementById('productBody');
+    const statusLabel = document.getElementById('status');
+    const pageInfo = document.getElementById('pageInfo');
+
+    let nextCursor = null;
+    let loadedCount = 0;
+    let currentCategory = '';
+    let currentLimit = 50;
+
+    async function fetchCategories() {
+      const res = await fetch('/categories');
+      const data = await res.json();
+      categorySelect.innerHTML = '<option value="">All</option>' + data.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    async function loadProducts(reset = false) {
+      if (reset) {
+        nextCursor = null;
+        loadedCount = 0;
+        productBody.innerHTML = '';
+      }
+      statusLabel.textContent = 'Loading...';
+      const params = new URLSearchParams();
+      params.set('limit', currentLimit);
+      if (currentCategory) params.set('category', currentCategory);
+      if (nextCursor) params.set('cursor', nextCursor);
+      const res = await fetch(`/products?${params.toString()}`);
+      const payload = await res.json();
+      payload.data.forEach((product) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${product.id}</td>
+          <td>${product.name}</td>
+          <td>${product.category}</td>
+          <td>$${Number(product.price).toFixed(2)}</td>
+          <td>${new Date(product.updatedAt).toLocaleString()}</td>
+        `;
+        productBody.appendChild(row);
+      });
+      loadedCount += payload.data.length;
+      nextCursor = payload.nextCursor;
+      loadMoreBtn.disabled = !payload.hasMore;
+      pageInfo.textContent = `Loaded ${loadedCount} products`;
+      statusLabel.textContent = payload.hasMore ? '' : 'No more products';
+    }
+
+    categorySelect.addEventListener('change', () => {
+      currentCategory = categorySelect.value;
+      loadProducts(true);
+    });
+    pageSizeSelect.addEventListener('change', () => {
+      currentLimit = Number(pageSizeSelect.value);
+      loadProducts(true);
+    });
+    refreshBtn.addEventListener('click', () => loadProducts(true));
+    loadMoreBtn.addEventListener('click', () => loadProducts(false));
+
+    fetchCategories();
+    loadProducts(true);
+  </script>
+</body>
+</html>
